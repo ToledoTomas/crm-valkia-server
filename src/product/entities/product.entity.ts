@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Invoice } from '../../invoice/entity/invoice.entity';
 
 @Entity()
 export class Product {
@@ -7,6 +8,9 @@ export class Product {
 
   @Column()
   name: string;
+
+  @Column()
+  cost: number;
 
   @Column()
   price: number;
@@ -22,4 +26,7 @@ export class Product {
 
   @Column()
   stock: number;
+
+  @ManyToOne(() => Invoice, (invoice) => invoice.products)
+  invoice: Invoice;
 }
