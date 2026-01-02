@@ -23,4 +23,15 @@ export class AuthService {
     const payload = { email: user.email, sub: user.id };
     return { accessToken: await this.jwtService.signAsync(payload) };
   }
+
+  async registerService(data: UserDto) {
+    const existingUser = await this.userService.getUserByEmailService(
+      data.email,
+    );
+    if (existingUser) {
+      throw new Error('User already exists');
+    }
+    await this.userService.createUserService(data);
+    return this.loginService(data);
+  }
 }

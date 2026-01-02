@@ -9,7 +9,7 @@ export class Product {
   @Column()
   name: string;
 
-  @Column()
+  @Column({ default: 0 })
   cost: number;
 
   @Column()
