@@ -3,7 +3,9 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToMany,
-  OneToOne,
+  ManyToMany,
+  ManyToOne,
+  JoinTable,
 } from 'typeorm';
 import { Product } from '../../product/entities/product.entity';
 import { Customer } from '../../customer/entity/customer.entity';
@@ -13,10 +15,11 @@ export class Invoice {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @OneToOne(() => Customer, (customer) => customer.invoice)
+  @ManyToOne(() => Customer, (customer) => customer.invoices)
   customer: Customer;
 
-  @OneToMany(() => Product, (product) => product.invoice)
+  @ManyToMany(() => Product, (product) => product.invoices)
+  @JoinTable()
   products: Product[];
 
   @Column()

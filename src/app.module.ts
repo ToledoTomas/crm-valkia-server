@@ -8,7 +8,8 @@ import { InvoiceModule } from './invoice/invoice.module';
 import { CustomerModule } from './customer/customer.module';
 import { AuthModule } from './auth/auth.module';
 import { User } from './user/entity/user.entity';
-
+import { Invoice } from './invoice/entity/invoice.entity';
+import { Customer } from './customer/entity/customer.entity';
 @Module({
   imports: [
     TypeOrmModule.forRoot({
@@ -18,7 +19,7 @@ import { User } from './user/entity/user.entity';
       username: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
-      entities: [Product, User],
+      entities: [Product, User, Invoice, Customer],
       synchronize: true,
     }),
     TypeOrmModule.forFeature([Product]),

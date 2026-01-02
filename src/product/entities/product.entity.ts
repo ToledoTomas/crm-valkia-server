@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
 import { Invoice } from '../../invoice/entity/invoice.entity';
 
 @Entity()
@@ -27,6 +27,6 @@ export class Product {
   @Column()
   stock: number;
 
-  @ManyToOne(() => Invoice, (invoice) => invoice.products)
-  invoice: Invoice;
+  @ManyToMany(() => Invoice, (invoice) => invoice.products)
+  invoices: Invoice[];
 }

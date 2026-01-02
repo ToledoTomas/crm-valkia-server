@@ -5,6 +5,10 @@ import { UserService } from '../user/user.service';
 import * as bcrypt from 'bcrypt';
 import { UserDto } from '../user/dto/user.dto';
 
+jest.mock('bcrypt', () => ({
+  compare: jest.fn(),
+}));
+
 describe('AuthService', () => {
   let service: AuthService;
   let jwtService: JwtService;
@@ -42,6 +46,10 @@ describe('AuthService', () => {
     expect(service).toBeDefined();
   });
 
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
   describe('loginService', () => {
     it('should return an access token for valid credentials', async () => {
       const userDto: UserDto = {
@@ -56,9 +64,7 @@ describe('AuthService', () => {
       const token = 'jwtToken';
 
       mockUserService.getUserByEmailService.mockResolvedValue(user);
-      jest
-        .spyOn(bcrypt, 'compare')
-        .mockImplementation(() => Promise.resolve(true));
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
       mockJwtService.signAsync.mockResolvedValue(token);
 
       const result = await service.loginService(userDto);
@@ -102,9 +108,7 @@ describe('AuthService', () => {
       };
 
       mockUserService.getUserByEmailService.mockResolvedValue(user);
-      jest
-        .spyOn(bcrypt, 'compare')
-        .mockImplementation(() => Promise.resolve(false));
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
       await expect(service.loginService(userDto)).rejects.toThrow(
         'Invalid password',
