@@ -3,6 +3,7 @@ import { ProductController } from './product.controller';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { AuthGuard } from '../auth/auth.guard';
 
 describe('ProductController', () => {
   let controller: ProductController;
@@ -25,7 +26,10 @@ describe('ProductController', () => {
           useValue: mockProductService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(AuthGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .compile();
 
     controller = module.get<ProductController>(ProductController);
     service = module.get<ProductService>(ProductService);
@@ -40,6 +44,7 @@ describe('ProductController', () => {
       const createProductDto: CreateProductDto = {
         name: 'Test Product',
         price: 100,
+        cost: 50,
         description: 'Test Description',
         color: ['red', 'blue'],
         size: ['S', 'M', 'L'],
@@ -111,7 +116,10 @@ describe('ProductController', () => {
 
       const result = await controller.update(id, updateProductDto);
 
-      expect(mockProductService.update).toHaveBeenCalledWith(1, updateProductDto);
+      expect(mockProductService.update).toHaveBeenCalledWith(
+        1,
+        updateProductDto,
+      );
       expect(result).toEqual(updatedProduct);
     });
   });
@@ -133,4 +141,3 @@ describe('ProductController', () => {
     });
   });
 });
-

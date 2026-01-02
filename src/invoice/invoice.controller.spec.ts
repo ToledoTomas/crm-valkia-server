@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InvoiceController } from './invoice.controller';
 import { InvoiceService } from './invoice.service';
+import { AuthGuard } from '../auth/auth.guard';
 
 describe('InvoiceController', () => {
   let controller: InvoiceController;
@@ -17,7 +18,10 @@ describe('InvoiceController', () => {
           useValue: mockInvoiceService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(AuthGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .compile();
 
     controller = module.get<InvoiceController>(InvoiceController);
     service = module.get<InvoiceService>(InvoiceService);
@@ -27,4 +31,3 @@ describe('InvoiceController', () => {
     expect(controller).toBeDefined();
   });
 });
-

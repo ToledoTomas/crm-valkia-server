@@ -48,6 +48,7 @@ describe('ProductService', () => {
       const createProductDto: CreateProductDto = {
         name: 'Test Product',
         price: 100,
+        cost: 50,
         description: 'Test Description',
         color: ['red', 'blue'],
         size: ['S', 'M', 'L'],
@@ -120,9 +121,7 @@ describe('ProductService', () => {
 
       mockProductRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.findOne(id)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findOne(id)).rejects.toThrow(NotFoundException);
       await expect(service.findOne(id)).rejects.toThrow(
         `Product with id: ${id} not found`,
       );
@@ -198,4 +197,3 @@ describe('ProductService', () => {
     });
   });
 });
-

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CustomerController } from './customer.controller';
 import { CustomerService } from './customer.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
+import { AuthGuard } from '../auth/auth.guard';
 
 describe('CustomerController', () => {
   let controller: CustomerController;
@@ -20,7 +21,10 @@ describe('CustomerController', () => {
           useValue: mockCustomerService,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(AuthGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .compile();
 
     controller = module.get<CustomerController>(CustomerController);
     service = module.get<CustomerService>(CustomerService);
