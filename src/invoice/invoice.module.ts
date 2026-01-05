@@ -12,6 +12,6 @@ import { JwtService } from '@nestjs/jwt';
 @Module({
   imports: [TypeOrmModule.forFeature([Invoice, Product, Customer]), AuthModule],
   controllers: [InvoiceController],
-  providers: [InvoiceService, JwtService],
+  providers: [InvoiceService],
 })
 export class InvoiceModule {}

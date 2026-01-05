@@ -1,4 +1,12 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { CustomerService } from './customer.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { AuthGuard } from '../auth/auth.guard';
@@ -11,5 +19,17 @@ export class CustomerController {
   @UseGuards(AuthGuard)
   async createCustomer(@Body() customerDto: CreateCustomerDto) {
     return this.customerService.createCustomer(customerDto);
+  }
+
+  @Get()
+  @UseGuards(AuthGuard)
+  async getCustomers() {
+    return this.customerService.getCustomers();
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard)
+  async deleteCustomer(@Param('id') id: number) {
+    return this.customerService.deleteCustomer(id.toString());
   }
 }

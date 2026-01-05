@@ -6,6 +6,7 @@ import { AuthGuard } from '../auth/auth.guard';
 
 describe('CustomerController', () => {
   let controller: CustomerController;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let service: CustomerService;
 
   const mockCustomerService = {
