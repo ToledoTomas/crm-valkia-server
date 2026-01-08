@@ -1,8 +1,9 @@
 import { HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Like, Repository } from 'typeorm';
 import { Customer } from './entity/customer.entity';
+import { SearchCustomerDto } from './dto/search-customer.dto';
 
 @Injectable()
 export class CustomerService {
@@ -16,8 +17,16 @@ export class CustomerService {
     return this.customerRepository.save(customer);
   }
 
-  async getCustomers() {
-    return this.customerRepository.find();
+  async getCustomers(searchTerm?: string) {
+    if (!searchTerm) {
+      return this.customerRepository.find();
+    }
+
+    return this.customerRepository.find({
+      where: {
+        fullname: Like(`%${searchTerm}%`),
+      },
+    });
   }
 
   async deleteCustomer(id: string) {
@@ -29,5 +38,16 @@ export class CustomerService {
       status: HttpStatus.OK,
       message: `Customer with id: ${id} deleted successfully`,
     };
+  }
+
+  async findByFullname(dto: SearchCustomerDto) {
+    const { fullname } = dto;
+    const query = this.customerRepository.createQueryBuilder('customer');
+    if (fullname) {
+      query.andWhere('customer.fullname ILIKE :fullname', {
+        fullname: `%${fullname}%`,
+      });
+    }
+    return query.getMany();
   }
 }

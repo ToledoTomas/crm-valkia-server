@@ -13,6 +13,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { SearchProductDto } from './dto/search-product.dto';
 
 @Controller('products')
 export class ProductController {
@@ -27,6 +28,12 @@ export class ProductController {
   @Get()
   findAll(@Query('search') searchTerm?: string) {
     return this.productService.findAll(searchTerm);
+  }
+
+  @Get('search')
+  @UseGuards(AuthGuard)
+  findByName(@Query() dto: SearchProductDto) {
+    return this.productService.findByName(dto);
   }
 
   @Get(':id')

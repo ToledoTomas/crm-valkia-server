@@ -4,6 +4,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Product } from './entities/product.entity';
 import { Like, Repository } from 'typeorm';
+import { SearchProductDto } from './dto/search-product.dto';
 
 @Injectable()
 export class ProductService {
@@ -59,5 +60,14 @@ export class ProductService {
       status: HttpStatus.OK,
       message: `Product with id: ${id} deleted successfully`,
     };
+  }
+
+  async findByName(dto: SearchProductDto): Promise<Product[]> {
+    const { name } = dto;
+    const query = this.productRepository.createQueryBuilder('product');
+    if (name) {
+      query.andWhere('product.name ILIKE :name', { name: `%${name}%` });
+    }
+    return query.getMany();
   }
 }
