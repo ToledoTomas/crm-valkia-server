@@ -3,8 +3,10 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Product } from './entities/product.entity';
-import { Like, Repository } from 'typeorm';
+import { Like, Repository, FindManyOptions } from 'typeorm';
 import { SearchProductDto } from './dto/search-product.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 
 @Injectable()
 export class ProductService {
@@ -18,16 +20,35 @@ export class ProductService {
     return this.productRepository.save(product);
   }
 
-  async findAll(searchTerm?: string): Promise<Product[]> {
-    if (!searchTerm) {
-      return this.productRepository.find();
+  async findAll(
+    paginationDto: PaginationDto,
+    searchTerm?: string,
+  ): Promise<PaginatedResult<Product>> {
+    const { page = 1, limit = 10 } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    const queryOptions: FindManyOptions<Product> = {
+      skip,
+      take: limit,
+    };
+
+    if (searchTerm) {
+      queryOptions.where = {
+        name: Like(`%${searchTerm}%`),
+      };
     }
 
-    return this.productRepository.find({
-      where: {
-        name: Like(`%${searchTerm}%`),
+    const [data, total] =
+      await this.productRepository.findAndCount(queryOptions);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        last_page: Math.ceil(total / limit),
       },
-    });
+    };
   }
 
   async findOne(id: number) {

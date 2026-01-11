@@ -4,12 +4,15 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { InvoiceService } from './invoice.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Controller('invoice')
 export class InvoiceController {
@@ -22,8 +25,8 @@ export class InvoiceController {
   }
   @Get()
   @UseGuards(AuthGuard)
-  findAll() {
-    return this.invoiceService.findAll();
+  findAll(@Query() paginationDto: PaginationDto) {
+    return this.invoiceService.findAll(paginationDto);
   }
 
   @Get(':id')
@@ -36,5 +39,11 @@ export class InvoiceController {
   @UseGuards(AuthGuard)
   remove(@Param('id') id: string) {
     return this.invoiceService.remove(+id);
+  }
+
+  @Patch(':id')
+  @UseGuards(AuthGuard)
+  updateStatus(@Param('id') id: string, @Body() status: string) {
+    return this.invoiceService.updateStatus(+id, status);
   }
 }

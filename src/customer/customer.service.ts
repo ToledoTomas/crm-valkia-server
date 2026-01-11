@@ -1,9 +1,11 @@
 import { HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository } from 'typeorm';
+import { Like, Repository, FindManyOptions } from 'typeorm';
 import { Customer } from './entity/customer.entity';
 import { SearchCustomerDto } from './dto/search-customer.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
+import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 
 @Injectable()
 export class CustomerService {
@@ -17,16 +19,35 @@ export class CustomerService {
     return this.customerRepository.save(customer);
   }
 
-  async getCustomers(searchTerm?: string) {
-    if (!searchTerm) {
-      return this.customerRepository.find();
+  async getCustomers(
+    paginationDto: PaginationDto,
+    searchTerm?: string,
+  ): Promise<PaginatedResult<Customer>> {
+    const { page = 1, limit = 10 } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    const queryOptions: FindManyOptions<Customer> = {
+      skip,
+      take: limit,
+    };
+
+    if (searchTerm) {
+      queryOptions.where = {
+        fullname: Like(`%${searchTerm}%`),
+      };
     }
 
-    return this.customerRepository.find({
-      where: {
-        fullname: Like(`%${searchTerm}%`),
+    const [data, total] =
+      await this.customerRepository.findAndCount(queryOptions);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        last_page: Math.ceil(total / limit),
       },
-    });
+    };
   }
 
   async deleteCustomer(id: string) {
@@ -40,6 +61,10 @@ export class CustomerService {
     };
   }
 
+  async getCustomer(id: number) {
+    return this.customerRepository.findOneBy({ id });
+  }
+
   async findByFullname(dto: SearchCustomerDto) {
     const { fullname } = dto;
     const query = this.customerRepository.createQueryBuilder('customer');
@@ -49,5 +74,13 @@ export class CustomerService {
       });
     }
     return query.getMany();
+  }
+
+  async updateCustomer(id: number, customerDto: CreateCustomerDto) {
+    const customer = await this.customerRepository.findOneBy({ id });
+    if (!customer) {
+      throw new NotFoundException(`Customer with id: ${id} not found`);
+    }
+    return this.customerRepository.update(id, customerDto);
   }
 }

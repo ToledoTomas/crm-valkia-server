@@ -14,6 +14,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { SearchProductDto } from './dto/search-product.dto';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @Controller('products')
 export class ProductController {
@@ -26,8 +27,11 @@ export class ProductController {
   }
 
   @Get()
-  findAll(@Query('search') searchTerm?: string) {
-    return this.productService.findAll(searchTerm);
+  findAll(
+    @Query() paginationDto: PaginationDto,
+    @Query('search') searchTerm?: string,
+  ) {
+    return this.productService.findAll(paginationDto, searchTerm);
   }
 
   @Get('search')
