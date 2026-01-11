@@ -26,19 +26,49 @@ export class InvoiceService {
     }
 
     const products: Product[] = [];
+    let total = 0;
+
     for (const productId of invoiceDto.products) {
       const product = await this.productRepository.findOneBy({ id: productId });
-      if (product) {
-        products.push(product);
+      if (!product) {
+        throw new Error(`Product with id ${productId} not found`);
       }
+      if (product.stock <= 0) {
+        throw new Error(`Product ${product.name} has no available stock`);
+      }
+      products.push(product);
+      total += product.price;
     }
 
     const invoice = this.invoiceRepository.create({
-      ...invoiceDto,
       customer: customer,
       products: products,
-      // You might want to calculate total here based on products
+      total: total,
+      status: invoiceDto.status,
+      created_at: new Date(),
     });
     return this.invoiceRepository.save(invoice);
+  }
+  async findAll() {
+    return this.invoiceRepository.find({
+      relations: {
+        customer: true,
+        products: true,
+      },
+    });
+  }
+
+  async findOne(id: number) {
+    return this.invoiceRepository.findOne({
+      where: { id },
+      relations: {
+        customer: true,
+        products: true,
+      },
+    });
+  }
+
+  async remove(id: number) {
+    return this.invoiceRepository.delete(id);
   }
 }

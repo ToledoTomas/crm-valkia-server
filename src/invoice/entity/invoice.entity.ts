@@ -2,7 +2,6 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  OneToMany,
   ManyToMany,
   ManyToOne,
   JoinTable,
@@ -24,6 +23,9 @@ export class Invoice {
 
   @Column()
   total: number;
+
+  @Column({ default: 'PENDING' })
+  status: string;
 
   @Column()
   created_at: Date;

@@ -1,4 +1,10 @@
-import { IsNumber, IsArray, IsDateString } from 'class-validator';
+import {
+  IsNumber,
+  IsArray,
+  IsDateString,
+  IsString,
+  IsOptional,
+} from 'class-validator';
 
 export class CreateInvoiceDto {
   @IsNumber()
@@ -10,6 +16,10 @@ export class CreateInvoiceDto {
   @IsArray()
   @IsNumber({}, { each: true })
   products: number[];
+
+  @IsString()
+  @IsOptional()
+  status: string;
 
   @IsNumber()
   total: number;
