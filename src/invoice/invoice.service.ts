@@ -2,10 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Invoice } from './entity/invoice.entity';
-import { Repository } from 'typeorm';
+import { Repository, DataSource, EntityManager } from 'typeorm';
 import { Customer } from '../customer/entity/customer.entity';
 import { Product } from '../product/entities/product.entity';
-
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 
@@ -14,44 +13,60 @@ export class InvoiceService {
   constructor(
     @InjectRepository(Invoice)
     private readonly invoiceRepository: Repository<Invoice>,
-    @InjectRepository(Customer)
-    private readonly customerRepository: Repository<Customer>,
-    @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async createInvoice(invoiceDto: CreateInvoiceDto) {
-    const customer = await this.customerRepository.findOneBy({
-      id: invoiceDto.customer,
-    });
-    if (!customer) {
-      throw new Error('Customer not found');
-    }
+    return await this.dataSource.manager.transaction(
+      async (manager: EntityManager) => {
+        const customer = await manager.findOneBy(Customer, {
+          id: invoiceDto.customer,
+        });
 
-    const products: Product[] = [];
-    let total = 0;
+        if (!customer) {
+          throw new Error('Cliente no encontrado');
+        }
 
-    for (const productId of invoiceDto.products) {
-      const product = await this.productRepository.findOneBy({ id: productId });
-      if (!product) {
-        throw new Error(`Product with id ${productId} not found`);
-      }
-      if (product.stock <= 0) {
-        throw new Error(`Product ${product.name} has no available stock`);
-      }
-      products.push(product);
-      total += product.price;
-    }
+        const products: Product[] = [];
+        let total = 0;
 
-    const invoice = this.invoiceRepository.create({
-      customer: customer,
-      products: products,
-      total: total,
-      status: invoiceDto.status,
-      created_at: new Date(),
-    });
-    return this.invoiceRepository.save(invoice);
+        // Sort product IDs to prevent deadlocks when locking multiple rows
+        const sortedProductIds = [...invoiceDto.products].sort((a, b) => a - b);
+
+        for (const productId of sortedProductIds) {
+          // Use pessimistic_write lock to prevent race conditions
+          const product = await manager.findOne(Product, {
+            where: { id: productId },
+            lock: { mode: 'pessimistic_write' },
+          });
+
+          if (!product) {
+            throw new Error(`Producto con id ${productId} no encontrado`);
+          }
+
+          if (product.stock <= 0) {
+            throw new Error(`Producto ${product.name} sin stock disponible`);
+          }
+
+          product.stock -= 1;
+          await manager.save(product);
+          products.push(product);
+          total += product.price;
+        }
+
+        const invoice = manager.create(Invoice, {
+          customer: customer,
+          products: products,
+          total: total,
+          status: invoiceDto.status,
+          created_at: new Date(),
+        });
+
+        return manager.save(invoice);
+      },
+    );
   }
+
   async findAll(
     paginationDto: PaginationDto,
   ): Promise<PaginatedResult<Invoice>> {

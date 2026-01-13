@@ -4,17 +4,34 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Invoice } from './entity/invoice.entity';
 import { Customer } from '../customer/entity/customer.entity';
 import { Product } from '../product/entities/product.entity';
-import { Repository } from 'typeorm';
+import { Repository, DataSource, ObjectLiteral } from 'typeorm';
 
-type MockRepository<T = any> = Partial<Record<keyof Repository<T>, jest.Mock>>;
+type MockRepository<T extends ObjectLiteral = any> = Partial<
+  Record<keyof Repository<T>, jest.Mock>
+>;
 
 describe('InvoiceService', () => {
   let service: InvoiceService;
   let invoiceRepository: MockRepository<Invoice>;
   let customerRepository: MockRepository<Customer>;
   let productRepository: MockRepository<Product>;
+  let dataSource: any;
+  let entityManager: any;
 
   beforeEach(async () => {
+    entityManager = {
+      findOneBy: jest.fn(),
+      findOne: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    };
+
+    dataSource = {
+      manager: {
+        transaction: jest.fn((cb) => cb(entityManager)),
+      },
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         InvoiceService,
@@ -40,6 +57,10 @@ describe('InvoiceService', () => {
             findOneBy: jest.fn(),
           },
         },
+        {
+          provide: DataSource,
+          useValue: dataSource,
+        },
       ],
     }).compile();
 
@@ -54,56 +75,86 @@ describe('InvoiceService', () => {
   });
 
   describe('createInvoice', () => {
-    it('should create an invoice with valid data', async () => {
+    it('should create an invoice with valid data and decrement stock', async () => {
       const customer = { id: 1, name: 'John Doe' };
       const product = { id: 1, name: 'Product A', price: 100, stock: 10 };
+      const updatedProduct = { ...product, stock: 9 };
       const invoiceDto = {
         customer: 1,
         products: [1],
         total: 0,
         created_at: new Date(),
         id: 0,
+        status: 'PENDING',
       };
-      const savedInvoice = { id: 1, total: 100, customer, products: [product] };
+      const savedInvoice = {
+        id: 1,
+        total: 100,
+        customer,
+        products: [updatedProduct],
+      };
 
-      customerRepository.findOneBy.mockResolvedValue(customer);
-      productRepository.findOneBy.mockResolvedValue(product);
-      invoiceRepository.create.mockReturnValue(savedInvoice);
-      invoiceRepository.save.mockResolvedValue(savedInvoice);
+      // Mock entity manager responses
+      entityManager.findOneBy.mockResolvedValue(customer);
+      entityManager.findOne.mockResolvedValue(product);
+      entityManager.create.mockReturnValue(savedInvoice);
+      entityManager.save.mockResolvedValue(savedInvoice);
 
       const result = await service.createInvoice(invoiceDto);
 
       expect(result).toEqual(savedInvoice);
-      expect(invoiceRepository.create).toHaveBeenCalledWith(
+      expect(dataSource.manager.transaction).toHaveBeenCalled();
+
+      // Verify customer lookup
+      expect(entityManager.findOneBy).toHaveBeenCalledWith(Customer, { id: 1 });
+
+      // Verify product lookup and locking
+      expect(entityManager.findOne).toHaveBeenCalledWith(Product, {
+        where: { id: 1 },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      // Verify stock update
+      expect(entityManager.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 1, stock: 9 }),
+      );
+
+      // Verify invoice creation
+      expect(entityManager.create).toHaveBeenCalledWith(
+        Invoice,
         expect.objectContaining({
           total: 100,
           customer: customer,
-          products: [product],
+          products: [expect.objectContaining({ id: 1 })],
         }),
       );
     });
 
     it('should throw error if product has no stock', async () => {
       const customer = { id: 1 };
-      const product = { id: 1, stock: 0 };
+      const product = { id: 1, stock: 0, name: 'Product A' };
       const invoiceDto = {
         customer: 1,
         products: [1],
         total: 0,
         created_at: new Date(),
         id: 0,
+        status: 'PENDING',
       };
 
-      customerRepository.findOneBy.mockResolvedValue(customer);
-      productRepository.findOneBy.mockResolvedValue(product);
+      entityManager.findOneBy.mockResolvedValue(customer);
+      entityManager.findOne.mockResolvedValue(product);
 
       await expect(service.createInvoice(invoiceDto)).rejects.toThrow(
-        'Product undefined has no available stock',
+        'Product Product A has no available stock',
       );
+
+      // Verify no save occurred
+      expect(entityManager.save).not.toHaveBeenCalled();
     });
 
     it('should throw error if customer not found', async () => {
-      customerRepository.findOneBy.mockResolvedValue(null);
+      entityManager.findOneBy.mockResolvedValue(null);
       await expect(
         service.createInvoice({
           customer: 1,
@@ -111,6 +162,7 @@ describe('InvoiceService', () => {
           total: 0,
           created_at: new Date(),
           id: 0,
+          status: 'PENDING',
         }),
       ).rejects.toThrow('Customer not found');
     });
@@ -118,11 +170,19 @@ describe('InvoiceService', () => {
 
   describe('findAll', () => {
     it('should return an array of invoices with relations', async () => {
-      const result = [{ id: 1, total: 100 }] as Invoice[];
-      invoiceRepository.find.mockResolvedValue(result);
+      const result = {
+        data: [{ id: 1, total: 100 } as Invoice],
+        meta: { total: 1, page: 1, last_page: 1 },
+      };
 
-      expect(await service.findAll()).toBe(result);
-      expect(invoiceRepository.find).toHaveBeenCalledWith({
+      invoiceRepository.findAndCount = jest
+        .fn()
+        .mockResolvedValue([result.data, 1]);
+
+      expect(await service.findAll({ page: 1, limit: 10 })).toEqual(result);
+      expect(invoiceRepository.findAndCount).toHaveBeenCalledWith({
+        skip: 0,
+        take: 10,
         relations: {
           customer: true,
           products: true,
