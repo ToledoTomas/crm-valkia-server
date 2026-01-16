@@ -7,7 +7,6 @@ import { Invoice } from './entity/invoice.entity';
 import { Product } from '../product/entities/product.entity';
 import { Customer } from '../customer/entity/customer.entity';
 import { AuthModule } from '../auth/auth.module';
-import { JwtService } from '@nestjs/jwt';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Invoice, Product, Customer]), AuthModule],

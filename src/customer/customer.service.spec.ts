@@ -12,6 +12,7 @@ describe('CustomerService', () => {
   const mockCustomerRepository = {
     create: jest.fn(),
     save: jest.fn(),
+    softDelete: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -52,6 +53,27 @@ describe('CustomerService', () => {
       );
       expect(mockCustomerRepository.save).toHaveBeenCalledWith(savedCustomer);
       expect(result).toEqual(savedCustomer);
+    });
+  });
+  describe('deleteCustomer', () => {
+    it('should soft delete a customer', async () => {
+      const id = '1';
+      mockCustomerRepository.softDelete.mockResolvedValue({ affected: 1 });
+
+      const result = await service.deleteCustomer(id);
+
+      expect(mockCustomerRepository.softDelete).toHaveBeenCalledWith(id);
+      expect(result).toEqual({
+        status: 200,
+        message: `Customer with id: ${id} deleted successfully`,
+      });
+    });
+
+    it('should throw NotFoundException if customer not found', async () => {
+      const id = '1';
+      mockCustomerRepository.softDelete.mockResolvedValue({ affected: 0 });
+
+      await expect(service.deleteCustomer(id)).rejects.toThrow();
     });
   });
 });
