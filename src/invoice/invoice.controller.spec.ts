@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { InvoiceController } from './invoice.controller';
 import { InvoiceService } from './invoice.service';
 import { AuthGuard } from '../auth/auth.guard';
-import { CreateInvoiceDto } from './dto/create-invoice.dto';
 
 describe('InvoiceController', () => {
   let controller: InvoiceController;
@@ -39,7 +38,10 @@ describe('InvoiceController', () => {
 
   describe('createInvoice', () => {
     it('should create an invoice', async () => {
-      const dto: CreateInvoiceDto = { customer: 1, products: [1, 2] };
+      const dto = {
+        customerId: 1,
+        items: [{ productVariantId: 1, quantity: 2 }],
+      };
       const result = { id: 1, ...dto };
       mockInvoiceService.createInvoice.mockResolvedValue(result);
 
@@ -53,7 +55,7 @@ describe('InvoiceController', () => {
       const result = [{ id: 1 }];
       mockInvoiceService.findAll.mockResolvedValue(result);
 
-      expect(await controller.findAll()).toBe(result);
+      expect(await controller.findAll({ page: 1, limit: 10 })).toBe(result);
       expect(service.findAll).toHaveBeenCalled();
     });
   });
@@ -63,17 +65,17 @@ describe('InvoiceController', () => {
       const result = { id: 1 };
       mockInvoiceService.findOne.mockResolvedValue(result);
 
-      expect(await controller.findOne('1')).toBe(result);
+      expect(await controller.findOne(1)).toBe(result);
       expect(service.findOne).toHaveBeenCalledWith(1);
     });
   });
 
   describe('remove', () => {
     it('should remove an invoice', async () => {
-      const result = { affected: 1 };
+      const result = { status: 200, message: 'Deleted' };
       mockInvoiceService.remove.mockResolvedValue(result);
 
-      expect(await controller.remove('1')).toBe(result);
+      expect(await controller.remove(1)).toBe(result);
       expect(service.remove).toHaveBeenCalledWith(1);
     });
   });

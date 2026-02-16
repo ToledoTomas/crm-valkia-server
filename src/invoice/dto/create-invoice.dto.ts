@@ -1,29 +1,31 @@
 import {
   IsNumber,
-  IsArray,
-  IsDateString,
-  IsString,
   IsOptional,
+  IsArray,
+  ValidateNested,
+  IsInt,
+  IsPositive,
+  Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreateInvoiceItemDto {
+  @IsInt()
+  @IsPositive()
+  productVariantId: number;
+
+  @IsInt()
+  @Min(1)
+  quantity: number;
+}
 
 export class CreateInvoiceDto {
   @IsNumber()
-  id: number;
-
-  @IsNumber()
-  customer: number;
+  @IsOptional()
+  customerId?: number;
 
   @IsArray()
-  @IsNumber({}, { each: true })
-  products: number[];
-
-  @IsString()
-  @IsOptional()
-  status: string;
-
-  @IsNumber()
-  total: number;
-
-  @IsDateString()
-  created_at: Date;
+  @ValidateNested({ each: true })
+  @Type(() => CreateInvoiceItemDto)
+  items: CreateInvoiceItemDto[];
 }

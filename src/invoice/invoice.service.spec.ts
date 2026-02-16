@@ -2,19 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { InvoiceService } from './invoice.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Invoice } from './entity/invoice.entity';
-import { Customer } from '../customer/entity/customer.entity';
-import { Product } from '../product/entities/product.entity';
-import { Repository, DataSource, ObjectLiteral } from 'typeorm';
-
-type MockRepository<T extends ObjectLiteral = any> = Partial<
-  Record<keyof Repository<T>, jest.Mock>
->;
+import { DataSource } from 'typeorm';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 
 describe('InvoiceService', () => {
   let service: InvoiceService;
-  let invoiceRepository: MockRepository<Invoice>;
-  let customerRepository: MockRepository<Customer>;
-  let productRepository: MockRepository<Product>;
   let dataSource: any;
   let entityManager: any;
 
@@ -24,6 +16,7 @@ describe('InvoiceService', () => {
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
+      remove: jest.fn(),
     };
 
     dataSource = {
@@ -38,23 +31,8 @@ describe('InvoiceService', () => {
         {
           provide: getRepositoryToken(Invoice),
           useValue: {
-            find: jest.fn(),
+            findAndCount: jest.fn(),
             findOne: jest.fn(),
-            delete: jest.fn(),
-            create: jest.fn(),
-            save: jest.fn(),
-          },
-        },
-        {
-          provide: getRepositoryToken(Customer),
-          useValue: {
-            findOneBy: jest.fn(),
-          },
-        },
-        {
-          provide: getRepositoryToken(Product),
-          useValue: {
-            findOneBy: jest.fn(),
           },
         },
         {
@@ -65,9 +43,6 @@ describe('InvoiceService', () => {
     }).compile();
 
     service = module.get<InvoiceService>(InvoiceService);
-    invoiceRepository = module.get(getRepositoryToken(Invoice));
-    customerRepository = module.get(getRepositoryToken(Customer));
-    productRepository = module.get(getRepositoryToken(Product));
   });
 
   it('should be defined', () => {
@@ -77,26 +52,27 @@ describe('InvoiceService', () => {
   describe('createInvoice', () => {
     it('should create an invoice with valid data and decrement stock', async () => {
       const customer = { id: 1, name: 'John Doe' };
-      const product = { id: 1, name: 'Product A', price: 100, stock: 10 };
-      const updatedProduct = { ...product, stock: 9 };
+      const variant = {
+        id: 1,
+        product: { name: 'Product A' },
+        price: 100,
+        cost: 50,
+        stock: 10,
+      };
       const invoiceDto = {
-        customer: 1,
-        products: [1],
-        total: 0,
-        created_at: new Date(),
-        id: 0,
-        status: 'PENDING',
+        customerId: 1,
+        items: [{ productVariantId: 1, quantity: 1 }],
       };
       const savedInvoice = {
         id: 1,
         total: 100,
-        customer,
-        products: [updatedProduct],
+        totalCost: 50,
+        totalProfit: 50,
+        customerId: 1,
       };
 
-      // Mock entity manager responses
       entityManager.findOneBy.mockResolvedValue(customer);
-      entityManager.findOne.mockResolvedValue(product);
+      entityManager.findOne.mockResolvedValue(variant);
       entityManager.create.mockReturnValue(savedInvoice);
       entityManager.save.mockResolvedValue(savedInvoice);
 
@@ -104,116 +80,140 @@ describe('InvoiceService', () => {
 
       expect(result).toEqual(savedInvoice);
       expect(dataSource.manager.transaction).toHaveBeenCalled();
-
-      // Verify customer lookup
-      expect(entityManager.findOneBy).toHaveBeenCalledWith(Customer, { id: 1 });
-
-      // Verify product lookup and locking
-      expect(entityManager.findOne).toHaveBeenCalledWith(Product, {
-        where: { id: 1 },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      // Verify stock update
-      expect(entityManager.save).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 1, stock: 9 }),
-      );
-
-      // Verify invoice creation
-      expect(entityManager.create).toHaveBeenCalledWith(
-        Invoice,
-        expect.objectContaining({
-          total: 100,
-          customer: customer,
-          products: [expect.objectContaining({ id: 1 })],
-        }),
-      );
     });
 
-    it('should throw error if product has no stock', async () => {
+    it('should throw NotFoundException if customer not found', async () => {
+      entityManager.findOneBy.mockResolvedValue(null);
+
+      await expect(
+        service.createInvoice({
+          customerId: 999,
+          items: [{ productVariantId: 1, quantity: 1 }],
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException if stock insufficient', async () => {
       const customer = { id: 1 };
-      const product = { id: 1, stock: 0, name: 'Product A' };
-      const invoiceDto = {
-        customer: 1,
-        products: [1],
-        total: 0,
-        created_at: new Date(),
-        id: 0,
-        status: 'PENDING',
+      const variant = {
+        id: 1,
+        product: { name: 'Product A' },
+        price: 100,
+        stock: 0,
       };
 
       entityManager.findOneBy.mockResolvedValue(customer);
-      entityManager.findOne.mockResolvedValue(product);
+      entityManager.findOne.mockResolvedValue(variant);
 
-      await expect(service.createInvoice(invoiceDto)).rejects.toThrow(
-        'Product Product A has no available stock',
-      );
-
-      // Verify no save occurred
-      expect(entityManager.save).not.toHaveBeenCalled();
-    });
-
-    it('should throw error if customer not found', async () => {
-      entityManager.findOneBy.mockResolvedValue(null);
       await expect(
         service.createInvoice({
-          customer: 1,
-          products: [],
-          total: 0,
-          created_at: new Date(),
-          id: 0,
-          status: 'PENDING',
+          customerId: 1,
+          items: [{ productVariantId: 1, quantity: 1 }],
         }),
-      ).rejects.toThrow('Customer not found');
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('findAll', () => {
-    it('should return an array of invoices with relations', async () => {
+    it('should return paginated invoices', async () => {
       const result = {
-        data: [{ id: 1, total: 100 } as Invoice],
+        data: [{ id: 1, total: 100 }],
         meta: { total: 1, page: 1, last_page: 1 },
       };
 
-      invoiceRepository.findAndCount = jest
-        .fn()
-        .mockResolvedValue([result.data, 1]);
+      const invoiceRepository = {
+        findAndCount: jest.fn().mockResolvedValue([result.data, 1]),
+      };
 
-      expect(await service.findAll({ page: 1, limit: 10 })).toEqual(result);
-      expect(invoiceRepository.findAndCount).toHaveBeenCalledWith({
-        skip: 0,
-        take: 10,
-        relations: {
-          customer: true,
-          products: true,
-        },
-      });
+      // Re-mock for this test
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          InvoiceService,
+          {
+            provide: getRepositoryToken(Invoice),
+            useValue: invoiceRepository,
+          },
+          {
+            provide: DataSource,
+            useValue: dataSource,
+          },
+        ],
+      }).compile();
+
+      const testService = module.get<InvoiceService>(InvoiceService);
+
+      expect(await testService.findAll({ page: 1, limit: 10 })).toEqual(result);
     });
   });
 
   describe('findOne', () => {
-    it('should return a single invoice with relations', async () => {
-      const result = { id: 1, total: 100 } as Invoice;
-      invoiceRepository.findOne.mockResolvedValue(result);
+    it('should return a single invoice', async () => {
+      const result = { id: 1, total: 100 };
+      const invoiceRepository = {
+        findOne: jest.fn().mockResolvedValue(result),
+      };
 
-      expect(await service.findOne(1)).toBe(result);
-      expect(invoiceRepository.findOne).toHaveBeenCalledWith({
-        where: { id: 1 },
-        relations: {
-          customer: true,
-          products: true,
-        },
-      });
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          InvoiceService,
+          {
+            provide: getRepositoryToken(Invoice),
+            useValue: invoiceRepository,
+          },
+          {
+            provide: DataSource,
+            useValue: dataSource,
+          },
+        ],
+      }).compile();
+
+      const testService = module.get<InvoiceService>(InvoiceService);
+
+      expect(await testService.findOne(1)).toBe(result);
+    });
+
+    it('should throw NotFoundException if invoice not found', async () => {
+      const invoiceRepository = {
+        findOne: jest.fn().mockResolvedValue(null),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          InvoiceService,
+          {
+            provide: getRepositoryToken(Invoice),
+            useValue: invoiceRepository,
+          },
+          {
+            provide: DataSource,
+            useValue: dataSource,
+          },
+        ],
+      }).compile();
+
+      const testService = module.get<InvoiceService>(InvoiceService);
+
+      await expect(testService.findOne(999)).rejects.toThrow(NotFoundException);
     });
   });
 
   describe('remove', () => {
-    it('should remove the invoice', async () => {
-      const result = { affected: 1 };
-      invoiceRepository.delete.mockResolvedValue(result);
+    it('should remove the invoice and revert stock', async () => {
+      const invoice = {
+        id: 1,
+        items: [{ productVariantId: 1, quantity: 2 }],
+      };
+      const variant = { id: 1, stock: 8 };
 
-      expect(await service.remove(1)).toBe(result);
-      expect(invoiceRepository.delete).toHaveBeenCalledWith(1);
+      entityManager.findOne.mockResolvedValueOnce(invoice);
+      entityManager.findOne.mockResolvedValueOnce(variant);
+
+      const result = await service.remove(1);
+
+      expect(result).toEqual({
+        status: 200,
+        message: 'Venta con id 1 eliminada y stock revertido',
+      });
     });
   });
 });

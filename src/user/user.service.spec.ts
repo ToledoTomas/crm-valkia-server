@@ -5,6 +5,10 @@ import { User } from './entity/user.entity';
 import { Repository } from 'typeorm';
 import { UserDto } from './dto/user.dto';
 
+jest.mock('bcrypt', () => ({
+  hash: jest.fn().mockResolvedValue('hashedPassword'),
+}));
+
 describe('UserService', () => {
   let service: UserService;
   let repository: Repository<User>;
@@ -35,19 +39,28 @@ describe('UserService', () => {
   });
 
   describe('createUserService', () => {
-    it('should create and save a new user', async () => {
+    it('should create and save a new user with hashed password', async () => {
       const userDto: UserDto = {
         email: 'test@example.com',
         password: 'password',
-      }; // Add other properties if needed
-      const savedUser = { id: 1, ...userDto };
+      };
+      const userWithHashedPassword = {
+        email: userDto.email,
+        password: 'hashedPassword',
+      };
+      const savedUser = { id: 1, ...userWithHashedPassword };
 
       mockUserRepository.create.mockReturnValue(savedUser);
       mockUserRepository.save.mockResolvedValue(savedUser);
 
       const result = await service.createUserService(userDto);
 
-      expect(mockUserRepository.create).toHaveBeenCalledWith(userDto);
+      expect(mockUserRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: userDto.email,
+          password: 'hashedPassword',
+        }),
+      );
       expect(mockUserRepository.save).toHaveBeenCalledWith(savedUser);
       expect(result).toEqual(savedUser);
     });

@@ -1,5 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
-import { Invoice } from '../../invoice/entity/invoice.entity';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToMany,
+  CreateDateColumn,
+} from 'typeorm';
+import { ProductVariant } from './product-variant.entity';
 
 @Entity()
 export class Product {
@@ -9,24 +15,21 @@ export class Product {
   @Column()
   name: string;
 
-  @Column({ default: 0 })
-  cost: number;
-
   @Column()
-  price: number;
+  category: string;
 
-  @Column()
+  @Column({ nullable: true })
   description: string;
 
-  @Column('jsonb', { nullable: true })
-  color: string[];
+  @Column({ default: true })
+  active: boolean;
 
-  @Column('jsonb', { nullable: true })
-  size: string[];
+  @OneToMany(() => ProductVariant, (variant) => variant.product, {
+    cascade: true,
+    eager: true,
+  })
+  variants: ProductVariant[];
 
-  @Column()
-  stock: number;
-
-  @ManyToMany(() => Invoice, (invoice) => invoice.products)
-  invoices: Invoice[];
+  @CreateDateColumn()
+  createdAt: Date;
 }

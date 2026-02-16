@@ -1,10 +1,20 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  HttpStatus,
+} from '@nestjs/common';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Invoice } from './entity/invoice.entity';
+import { InvoiceItem } from './entity/invoice-item.entity';
 import { Repository, DataSource, EntityManager } from 'typeorm';
 import { Customer } from '../customer/entity/customer.entity';
-import { Product } from '../product/entities/product.entity';
+import { ProductVariant } from '../product/entities/product-variant.entity';
+import {
+  StockMovement,
+  StockMovementType,
+} from '../stock/entity/stock-movement.entity';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 
@@ -19,50 +29,89 @@ export class InvoiceService {
   async createInvoice(invoiceDto: CreateInvoiceDto) {
     return await this.dataSource.manager.transaction(
       async (manager: EntityManager) => {
-        const customer = await manager.findOneBy(Customer, {
-          id: invoiceDto.customer,
-        });
-
-        if (!customer) {
-          throw new Error('Cliente no encontrado');
+        // Validate customer if provided
+        let customer: Customer | null = null;
+        if (invoiceDto.customerId) {
+          customer = await manager.findOneBy(Customer, {
+            id: invoiceDto.customerId,
+          });
+          if (!customer) {
+            throw new NotFoundException(
+              `Cliente con id ${invoiceDto.customerId} no encontrado`,
+            );
+          }
         }
 
-        const products: Product[] = [];
         let total = 0;
+        let totalCost = 0;
+        const invoiceItems: Partial<InvoiceItem>[] = [];
 
-        // Sort product IDs to prevent deadlocks when locking multiple rows
-        const sortedProductIds = [...invoiceDto.products].sort((a, b) => a - b);
+        // Sort variant IDs to prevent deadlocks
+        const sortedItems = [...invoiceDto.items].sort(
+          (a, b) => a.productVariantId - b.productVariantId,
+        );
 
-        for (const productId of sortedProductIds) {
-          // Use pessimistic_write lock to prevent race conditions
-          const product = await manager.findOne(Product, {
-            where: { id: productId },
+        for (const item of sortedItems) {
+          // Lock variant row for update
+          const variant = await manager.findOne(ProductVariant, {
+            where: { id: item.productVariantId },
             lock: { mode: 'pessimistic_write' },
+            relations: ['product'],
           });
 
-          if (!product) {
-            throw new Error(`Producto con id ${productId} no encontrado`);
+          if (!variant) {
+            throw new NotFoundException(
+              `Variante con id ${item.productVariantId} no encontrada`,
+            );
           }
 
-          if (product.stock <= 0) {
-            throw new Error(`Producto ${product.name} sin stock disponible`);
+          if (variant.stock < item.quantity) {
+            throw new BadRequestException(
+              `Stock insuficiente para "${variant.product.name}" (${variant.color}/${variant.size}). ` +
+                `Disponible: ${variant.stock}, solicitado: ${item.quantity}`,
+            );
           }
 
-          product.stock -= 1;
-          await manager.save(product);
-          products.push(product);
-          total += product.price;
+          // Snapshot prices at time of sale
+          const priceAtSale = Number(variant.price);
+          const costAtSale = Number(variant.cost);
+
+          // Deduct stock
+          variant.stock -= item.quantity;
+          await manager.save(ProductVariant, variant);
+
+          // Create stock movement
+          await manager.save(StockMovement, {
+            productVariantId: variant.id,
+            type: StockMovementType.SALE,
+            quantity: -item.quantity,
+            reason: undefined,
+          });
+
+          // Prepare invoice item
+          invoiceItems.push({
+            productVariantId: variant.id,
+            quantity: item.quantity,
+            priceAtSale,
+            costAtSale,
+          });
+
+          total += priceAtSale * item.quantity;
+          totalCost += costAtSale * item.quantity;
         }
 
+        const totalProfit = total - totalCost;
+
+        // Create and save invoice with items
         const invoice = manager.create(Invoice, {
-          customer: customer,
-          products: products,
-          total: total,
-          status: invoiceDto.status,
-          created_at: new Date(),
+          customerId: customer?.id ?? undefined,
+          total: Math.round(total * 100) / 100,
+          totalCost: Math.round(totalCost * 100) / 100,
+          totalProfit: Math.round(totalProfit * 100) / 100,
+          items: invoiceItems as InvoiceItem[],
         });
 
-        return manager.save(invoice);
+        return manager.save(Invoice, invoice);
       },
     );
   }
@@ -78,8 +127,13 @@ export class InvoiceService {
       take: limit,
       relations: {
         customer: true,
-        products: true,
+        items: {
+          productVariant: {
+            product: true,
+          },
+        },
       },
+      order: { createdAt: 'DESC' },
     });
 
     return {
@@ -93,20 +147,63 @@ export class InvoiceService {
   }
 
   async findOne(id: number) {
-    return this.invoiceRepository.findOne({
+    const invoice = await this.invoiceRepository.findOne({
       where: { id },
       relations: {
         customer: true,
-        products: true,
+        items: {
+          productVariant: {
+            product: true,
+          },
+        },
       },
     });
+    if (!invoice) {
+      throw new NotFoundException(`Venta con id ${id} no encontrada`);
+    }
+    return invoice;
   }
 
   async remove(id: number) {
-    return this.invoiceRepository.delete(id);
-  }
+    return await this.dataSource.manager.transaction(
+      async (manager: EntityManager) => {
+        const invoice = await manager.findOne(Invoice, {
+          where: { id },
+          relations: ['items', 'items.productVariant'],
+        });
 
-  async updateStatus(id: number, status: string) {
-    return this.invoiceRepository.update(id, { status });
+        if (!invoice) {
+          throw new NotFoundException(`Venta con id ${id} no encontrada`);
+        }
+
+        // Revert stock for each item
+        for (const item of invoice.items) {
+          const variant = await manager.findOne(ProductVariant, {
+            where: { id: item.productVariantId },
+            lock: { mode: 'pessimistic_write' },
+          });
+
+          if (variant) {
+            variant.stock += item.quantity;
+            await manager.save(ProductVariant, variant);
+
+            // Create reversal stock movement
+            await manager.save(StockMovement, {
+              productVariantId: variant.id,
+              type: StockMovementType.MANUAL_ADJUSTMENT,
+              quantity: item.quantity,
+              reason: `Reversión de venta #${invoice.id}`,
+            });
+          }
+        }
+
+        await manager.remove(Invoice, invoice);
+
+        return {
+          status: HttpStatus.OK,
+          message: `Venta con id ${id} eliminada y stock revertido`,
+        };
+      },
+    );
   }
 }

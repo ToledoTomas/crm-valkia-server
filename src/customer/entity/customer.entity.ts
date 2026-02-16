@@ -4,6 +4,7 @@ import {
   PrimaryGeneratedColumn,
   OneToMany,
   DeleteDateColumn,
+  CreateDateColumn,
 } from 'typeorm';
 import { Invoice } from '../../invoice/entity/invoice.entity';
 
@@ -13,17 +14,26 @@ export class Customer {
   id: number;
 
   @Column()
-  fullname: string;
+  name: string;
 
-  @Column()
+  @Column({ nullable: true })
+  phone: string;
+
+  @Column({ nullable: true })
   email: string;
 
-  @Column()
-  phone: string;
+  @Column({ nullable: true })
+  instagram: string;
+
+  @Column({ type: 'date', nullable: true })
+  birthday: Date;
 
   @OneToMany(() => Invoice, (invoice) => invoice.customer)
   invoices: Invoice[];
 
   @DeleteDateColumn()
   deletedAt: Date;
+
+  @CreateDateColumn()
+  createdAt: Date;
 }

@@ -2,15 +2,25 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+
+// Entities
 import { Product } from './product/entities/product.entity';
-import { ProductModule } from './product/product.module';
-import { UserModule } from './user/user.module';
-import { InvoiceModule } from './invoice/invoice.module';
-import { CustomerModule } from './customer/customer.module';
-import { AuthModule } from './auth/auth.module';
+import { ProductVariant } from './product/entities/product-variant.entity';
 import { User } from './user/entity/user.entity';
 import { Invoice } from './invoice/entity/invoice.entity';
+import { InvoiceItem } from './invoice/entity/invoice-item.entity';
 import { Customer } from './customer/entity/customer.entity';
+import { StockMovement } from './stock/entity/stock-movement.entity';
+
+// Modules
+import { AuthModule } from './auth/auth.module';
+import { UserModule } from './user/user.module';
+import { ProductModule } from './product/product.module';
+import { InvoiceModule } from './invoice/invoice.module';
+import { CustomerModule } from './customer/customer.module';
+import { StockModule } from './stock/stock.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -38,14 +48,25 @@ import { Customer } from './customer/entity/customer.entity';
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
-      entities: [Product, User, Invoice, Customer],
+      entities: [
+        Product,
+        ProductVariant,
+        User,
+        Invoice,
+        InvoiceItem,
+        Customer,
+        StockMovement,
+      ],
       synchronize: true,
     }),
     AuthModule,
     UserModule,
+    ProductModule,
     InvoiceModule,
     CustomerModule,
-    ProductModule,
+    StockModule,
+    DashboardModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

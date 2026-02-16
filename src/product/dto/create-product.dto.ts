@@ -1,38 +1,31 @@
 import {
-  IsArray,
-  IsNumber,
-  IsOptional,
-  IsPositive,
   IsString,
-  Min,
+  IsOptional,
+  IsBoolean,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { CreateProductVariantDto } from './create-product-variant.dto';
 
 export class CreateProductDto {
   @IsString()
   name: string;
 
-  @IsNumber()
-  @IsPositive()
-  price: number;
-
-  @IsNumber()
-  @IsPositive()
-  cost: number;
+  @IsString()
+  category: string;
 
   @IsString()
-  description: string;
+  @IsOptional()
+  description?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  active?: boolean;
 
   @IsArray()
-  @IsString({ each: true })
+  @ValidateNested({ each: true })
+  @Type(() => CreateProductVariantDto)
   @IsOptional()
-  color: string[];
-
-  @IsArray()
-  @IsString({ each: true })
-  @IsOptional()
-  size: string[];
-
-  @IsNumber()
-  @Min(0)
-  stock: number;
+  variants?: CreateProductVariantDto[];
 }

@@ -2,31 +2,43 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  ManyToMany,
   ManyToOne,
-  JoinTable,
+  OneToMany,
+  CreateDateColumn,
+  JoinColumn,
 } from 'typeorm';
-import { Product } from '../../product/entities/product.entity';
 import { Customer } from '../../customer/entity/customer.entity';
+import { InvoiceItem } from './invoice-item.entity';
 
 @Entity()
 export class Invoice {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Customer, (customer) => customer.invoices)
+  @Column({ nullable: true })
+  customerId: number;
+
+  @ManyToOne(() => Customer, (customer) => customer.invoices, {
+    nullable: true,
+  })
+  @JoinColumn({ name: 'customerId' })
   customer: Customer;
 
-  @ManyToMany(() => Product, (product) => product.invoices)
-  @JoinTable()
-  products: Product[];
-
-  @Column()
+  @Column('decimal', { precision: 10, scale: 2 })
   total: number;
 
-  @Column({ default: 'PENDING' })
-  status: string;
+  @Column('decimal', { precision: 10, scale: 2 })
+  totalCost: number;
 
-  @Column()
-  created_at: Date;
+  @Column('decimal', { precision: 10, scale: 2 })
+  totalProfit: number;
+
+  @OneToMany(() => InvoiceItem, (item) => item.invoice, {
+    cascade: true,
+    eager: true,
+  })
+  items: InvoiceItem[];
+
+  @CreateDateColumn()
+  createdAt: Date;
 }

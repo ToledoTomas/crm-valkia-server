@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
 import * as bcrypt from 'bcrypt';
@@ -14,11 +18,11 @@ export class AuthService {
   async loginService(data: UserDto) {
     const user = await this.userService.getUserByEmailService(data.email);
     if (!user) {
-      throw new Error('User not found');
+      throw new UnauthorizedException('Credenciales inválidas');
     }
     const comparePasswords = await bcrypt.compare(data.password, user.password);
     if (!comparePasswords) {
-      throw new Error('Invalid password');
+      throw new UnauthorizedException('Credenciales inválidas');
     }
     const payload = { email: user.email, sub: user.id };
     return { accessToken: await this.jwtService.signAsync(payload) };
@@ -29,7 +33,7 @@ export class AuthService {
       data.email,
     );
     if (existingUser) {
-      throw new Error('User already exists');
+      throw new ConflictException('El usuario ya existe');
     }
     await this.userService.createUserService(data);
     return this.loginService(data);

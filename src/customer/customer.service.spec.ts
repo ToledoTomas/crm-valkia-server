@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Customer } from './entity/customer.entity';
 import { Repository } from 'typeorm';
 import { CreateCustomerDto } from './dto/create-customer.dto';
+import { NotFoundException } from '@nestjs/common';
 
 describe('CustomerService', () => {
   let service: CustomerService;
@@ -13,6 +14,14 @@ describe('CustomerService', () => {
     create: jest.fn(),
     save: jest.fn(),
     softDelete: jest.fn(),
+    findOneBy: jest.fn(),
+    findAndCount: jest.fn(),
+    createQueryBuilder: jest.fn().mockReturnValue({
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    }),
   };
 
   beforeEach(async () => {
@@ -55,9 +64,10 @@ describe('CustomerService', () => {
       expect(result).toEqual(savedCustomer);
     });
   });
+
   describe('deleteCustomer', () => {
     it('should soft delete a customer', async () => {
-      const id = '1';
+      const id = 1;
       mockCustomerRepository.softDelete.mockResolvedValue({ affected: 1 });
 
       const result = await service.deleteCustomer(id);
@@ -65,15 +75,17 @@ describe('CustomerService', () => {
       expect(mockCustomerRepository.softDelete).toHaveBeenCalledWith(id);
       expect(result).toEqual({
         status: 200,
-        message: `Customer with id: ${id} deleted successfully`,
+        message: `Cliente con id ${id} eliminado correctamente`,
       });
     });
 
     it('should throw NotFoundException if customer not found', async () => {
-      const id = '1';
+      const id = 1;
       mockCustomerRepository.softDelete.mockResolvedValue({ affected: 0 });
 
-      await expect(service.deleteCustomer(id)).rejects.toThrow();
+      await expect(service.deleteCustomer(id)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });
