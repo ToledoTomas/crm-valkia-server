@@ -10,6 +10,7 @@ import { Invoice } from './entity/invoice.entity';
 import { InvoiceItem } from './entity/invoice-item.entity';
 import { Repository, DataSource, EntityManager } from 'typeorm';
 import { Customer } from '../customer/entity/customer.entity';
+import { Product } from '../product/entities/product.entity';
 import { ProductVariant } from '../product/entities/product-variant.entity';
 import {
   StockMovement,
@@ -52,11 +53,10 @@ export class InvoiceService {
         );
 
         for (const item of sortedItems) {
-          // Lock variant row for update
+          // Lock variant row for update (without relations to avoid FOR UPDATE + LEFT JOIN conflict)
           const variant = await manager.findOne(ProductVariant, {
             where: { id: item.productVariantId },
             lock: { mode: 'pessimistic_write' },
-            relations: ['product'],
           });
 
           if (!variant) {
@@ -64,6 +64,17 @@ export class InvoiceService {
               `Variante con id ${item.productVariantId} no encontrada`,
             );
           }
+
+          // Load the product separately (needed for error messages)
+          const product = await manager.findOneBy(Product, {
+            id: variant.productId,
+          });
+          if (!product) {
+            throw new NotFoundException(
+              `Producto asociado a variante ${variant.id} no encontrado`,
+            );
+          }
+          variant.product = product;
 
           if (variant.stock < item.quantity) {
             throw new BadRequestException(
